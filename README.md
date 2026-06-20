@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="nave.svg" alt="NAVE Conformer Wave Logo" width="600">
+</p>
+
 # NAVE -- Normalized, Adaptive Conformer for Whale Vocalization-Event Detection
 
 Clean, hardcoded implementation of the locked conformer recipe for BioDCASE 2026
