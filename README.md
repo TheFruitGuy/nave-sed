@@ -1,3 +1,5 @@
+![NAVE Logo](nave.svg)
+
 # NAVE -- Normalized, Adaptive Conformer for Whale Vocalization-Event Detection
 
 Clean, hardcoded implementation of the locked conformer recipe for BioDCASE 2026
