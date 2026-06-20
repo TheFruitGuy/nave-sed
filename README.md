@@ -1,4 +1,3 @@
-![NAVE Logo](nave.svg)
 
 # NAVE -- Normalized, Adaptive Conformer for Whale Vocalization-Event Detection
 
