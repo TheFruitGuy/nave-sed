@@ -1,12 +1,8 @@
 """
 NAVE -- Normalized, Adaptive Conformer for Whale Vocalization-Event Detection
 =============================================================================
-Configuration: the single, hardcoded source of truth for the locked recipe
-(single-model macro F1 = 0.495 on the dev split; multi-seed probability
-ensemble on top). Every other ``nave_*`` module imports this as ``cfg``.
-
-Nothing here is a tunable knob any more. These are the values the final system
-uses; change them only to define a deliberately different system.
+Configuration: the single source of truth for every NAVE constant. Every other
+``nave_*`` module imports this as ``cfg``.
 
 Name mapping: N = Normalized (PCEN channel), A = Adaptive (frequency-dynamic
 FDY convolutions in the stem), Conformer backbone, for whale Vocalization-Event
@@ -88,7 +84,7 @@ BOTTLENECK_DROPOUT = 0.1
 AGG_DROPOUT = 0.2
 
 # ----------------------------------------------------------------------
-# NAVE architecture (the locked recipe)
+# NAVE architecture
 # ----------------------------------------------------------------------
 FDY_TARGETS = ("filterbank", "feat0")   # frequency-dynamic convs in the stem
 FDY_BASIS = 4                           # K basis kernels
@@ -98,7 +94,7 @@ D_MODEL = 128
 NHEAD = 4
 NUM_LAYERS = 4
 FFN_MULT = 4
-CONV_KERNEL = 129                       # wide depthwise kernel (sweep-selected)
+CONV_KERNEL = 129                       # wide depthwise kernel
 DROPOUT = 0.1
 
 # ----------------------------------------------------------------------
@@ -138,9 +134,9 @@ def n_feat_channels() -> int:
 
 
 def class_names() -> list[str]:
-    """Ordered class labels currently in use. NAVE is locked to the 3 coarse
-    classes (``USE_3CLASS`` is always True); the 7-class branch is kept only so
-    the shared post-processing helpers stay general."""
+    """Ordered class labels currently in use. NAVE uses the 3 coarse classes
+    (``USE_3CLASS`` is always True); the 7-class branch is kept only so the
+    shared post-processing helpers stay general."""
     return list(CALL_TYPES_3) if USE_3CLASS else list(CALL_TYPES_7)
 
 

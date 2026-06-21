@@ -2,28 +2,26 @@
   <img src="nave_logo.svg" alt="NAVE Conformer Wave Logo" width="600">
 </p>
 
-# NAVE &mdash; Normalized, Adaptive Conformer for Whale Vocalization-Event Detection
+# NAVE -- Normalized, Adaptive Conformer for Whale Vocalization-Event Detection
 
-Clean, hardcoded implementation of the locked conformer recipe for BioDCASE 2026
-Task 2 (3-class Antarctic baleen-whale SED: BMABZ / D / BP). Single-model dev
-macro F1 = 0.495; multi-seed probability ensemble on top.
+A clean implementation of a conformer model for BioDCASE 2026 Task 2 (3-class
+Antarctic baleen-whale sound-event detection: BMABZ / D / BP).
 
 - **N**ormalized -- fixed PCEN channel (per-bin AGC; recovers background-buried D downsweeps)
 - **A**daptive -- frequency-dynamic (FDY) convolutions in the stem
-- Conformer backbone (macaron FFN / RoPE MHSA / wide depthwise conv k=129)
+- Conformer backbone (macaron FFN / RoPE MHSA / wide depthwise conv)
 
 ## Files
 
 The training pipeline is **self-contained in four files**; the optional
 evaluation script `nave_evaluate.py` adds a fifth file that depends only on the
-four. Drop them into any repo and everything runs with nothing else from the
-original project.
+four.
 
 | file | role |
 |------|------|
-| `nave_config.py`   | single hardcoded source of truth (recipe constants + class helpers) |
+| `nave_config.py`   | single source of truth for all constants + class helpers |
 | `nave_features.py` | 4-ch STFT + PCEN front end (parameter-free) |
-| `nave_model.py`    | `NAVE` architecture + checkpoint loaders |
+| `nave_model.py`    | `NAVE` architecture + native checkpoint loader |
 | `nave_train.py`    | training entry point **and** the full data / post-processing / metrics / threshold-tuning pipeline |
 | `nave_evaluate.py` | *optional* — single-checkpoint evaluation (one inference pass + tuned per-class thresholds), imports only from the four files above |
 
@@ -66,15 +64,15 @@ cos phi, sin phi, PCEN]. FDY on filterbank+feat0 (basis 4). d_model 128, 4 heads
 4 layers, ffn x4, dropout 0.1, depthwise conv k=129. RAdam const LR 5e-5, wd 1e-3,
 EMA 0.999, 40 epochs, batch 32, neg-ratio 1.0, per-epoch negative resampling.
 Post: 500 ms median smooth -> tuned per-class thresholds -> 0.5 s merge gap ->
-0.5-30 s duration filter. Exactly 2,693,499 parameters.
+0.5-30 s duration filter.
 
 ## Usage
 
 ```bash
-# train one seed (vary --seed to build an ensemble of checkpoints)
+# train one seed
 CUDA_VISIBLE_DEVICES=0 python nave_train.py --seed 42 --tune-workers 20
 
-# evaluate a checkpoint on the validation sites (native or legacy phase13r both work)
+# evaluate a checkpoint on the validation sites
 CUDA_VISIBLE_DEVICES=0 python nave_evaluate.py runs/nave_s42_*/nave_best.pt --workers 13
 
 # write the tuned per-class thresholds to JSON; fp16 inference for speed
@@ -107,22 +105,6 @@ is in `nave_features.py`; the data loader `build_val_segments` / `WhaleDataset` 
 `compute_metrics`, and the tuner `tune_thresholds_per_class`) if you want to
 write your own evaluation or ensemble script on top — import them straight from
 `nave_train`. `nave_evaluate.py` is exactly that pattern in ~100 lines.
-
-## Checkpoint compatibility
-
-`nave_model.py` keeps a loader for checkpoints trained by the previous
-`train_phase13r` harness: `NAVE.from_legacy_checkpoint(path)` remaps the old
-module names (`_inner.* -> stem.*`, `_proj -> proj`, `classifier -> head`),
-drops the dead WhaleVAD BiLSTM keys, and surfaces the stored tuned thresholds.
-Verified: 202/202 keys, 0 missing / 0 unexpected, output byte-identical to the
-existing model (max abs diff 0.0), param count exactly 2,693,499. Native NAVE
-checkpoints load with `NAVE().load_checkpoint(path)`.
-
-```python
-from nave_model import NAVE
-m, meta = NAVE.from_legacy_checkpoint("runs/phase13r_3c_s42_<ts>/phase13r_best.pt")
-print("loaded NAVE", sum(p.numel() for p in m.parameters()), meta)
-```
 
 ## Logging
 

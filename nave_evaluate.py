@@ -1,13 +1,11 @@
 """
 NAVE single-checkpoint evaluation.
 ==================================
-Loads a NAVE checkpoint (native, or legacy ``train_phase13r``), runs one
-inference pass over the validation sites, tunes per-class thresholds and
-reports the macro F1 (the official challenge metric, the mean of the three
-per-class F1s).
+Loads a NAVE checkpoint, runs one inference pass over the validation sites,
+tunes per-class thresholds and reports the macro F1 (the official challenge
+metric, the mean of the three per-class F1s).
 
     CUDA_VISIBLE_DEVICES=0 python nave_evaluate.py runs/nave_s42_*/nave_best.pt --workers 13
-    CUDA_VISIBLE_DEVICES=0 python nave_evaluate.py runs/phase13r_3c_s42_*/phase13r_best.pt
 
 Self-contained
 --------------
@@ -47,21 +45,14 @@ from nave_train import (
 
 
 # ----------------------------------------------------------------------
-# Checkpoint loader (native or legacy phase13r, auto-detected)
+# Checkpoint loader
 # ----------------------------------------------------------------------
 
 def build_nave_from_ckpt(path, device):
-    """Auto-detect legacy vs native NAVE checkpoint; return (model, stored_thr)."""
-    ckpt = torch.load(path, map_location="cpu", weights_only=False)
-    sd = ckpt.get("model_state_dict", ckpt) if isinstance(ckpt, dict) else ckpt
-    is_legacy = any(k.startswith("_inner.") for k in sd)
-    if is_legacy:
-        model, meta = NAVE.from_legacy_checkpoint(path, map_location=device)
-        stored_thr = meta.get("thresholds")
-    else:
-        model = NAVE()
-        model.load_checkpoint(path, map_location=device)
-        stored_thr = ckpt.get("thresholds") if isinstance(ckpt, dict) else None
+    """Load a NAVE checkpoint; return (model, stored_thr)."""
+    model = NAVE()
+    ckpt = model.load_checkpoint(path, map_location=device)
+    stored_thr = ckpt.get("thresholds") if isinstance(ckpt, dict) else None
     return model.to(device).eval(), stored_thr
 
 
@@ -139,7 +130,7 @@ def f1(metrics) -> float:
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("ckpt", type=Path, help="NAVE checkpoint (native or legacy).")
+    p.add_argument("ckpt", type=Path, help="NAVE checkpoint.")
     p.add_argument("--workers", type=int, default=8, help="Threshold-tuner workers.")
     p.add_argument("--fp16", action="store_true", help="fp16 inference.")
     p.add_argument("--out", type=Path, default=None,

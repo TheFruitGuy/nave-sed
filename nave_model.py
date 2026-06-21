@@ -1,26 +1,18 @@
 """
 NAVE model -- Normalized, Adaptive Conformer for Whale Vocalization-Event Detection
 ===================================================================================
-Self-contained definition of the locked architecture (single-model dev macro
-F1 = 0.495). Composition:
+Self-contained definition of the NAVE architecture. Composition:
 
     4-ch STFT+PCEN  ->  FDY stem (filterbank + feat0 frequency-dynamic)
                     ->  residual stack (bottleneck + depthwise)
                     ->  flatten (C*F) -> linear projection -> d_model
                     ->  N x Conformer block (macaron FFN / RoPE MHSA /
-                        wide depthwise conv k=129 / macaron FFN)
+                        wide depthwise conv / macaron FFN)
                     ->  linear frame head -> per-frame logits (B, T, 3)
 
 All hyperparameters are taken from ``nave_config``. The projection is built
 eagerly at construction from a shape probe (the flattened CNN width is fixed by
 the STFT settings), so the state_dict is complete before the first forward.
-
-``NAVE.from_legacy_checkpoint`` loads checkpoints trained by the previous
-``train_phase13r`` harness: it remaps the old module names
-(``_inner.filterbank`` -> ``stem.filterbank``, ``_proj`` -> ``proj``,
-``classifier`` -> ``head``) and drops the dead WhaleVAD BiLSTM/classifier keys,
-verified to load with zero missing / unexpected parameters. Existing seeds and
-the 0.495 best therefore transfer with no retraining.
 """
 
 from __future__ import annotations
@@ -306,22 +298,6 @@ class ConformerBlock(nn.Module):
 # NAVE
 # ======================================================================
 
-# legacy (train_phase13r) -> NAVE state_dict key remapping
-_DROP_PREFIXES = ("_inner.lstm.", "_inner.classifier.", "_inner.feat_proj.")
-
-
-def _remap_legacy_key(k: str) -> str | None:
-    if k.startswith(_DROP_PREFIXES):
-        return None                                            # dead WhaleVAD params
-    if k.startswith("_inner."):
-        return "stem." + k[len("_inner."):]
-    if k.startswith("_proj."):
-        return "proj." + k[len("_proj."):]
-    if k.startswith("classifier."):
-        return "head." + k[len("classifier."):]
-    return k                                                   # blocks.* unchanged
-
-
 class NAVE(nn.Module):
     """Normalized, Adaptive Conformer for Whale Vocalization-Event Detection."""
 
@@ -368,48 +344,9 @@ class NAVE(nn.Module):
             x = blk(x, key_padding_mask)
         return self.head(x)                                    # (B, T, N_CLASSES)
 
-    # ------------------------------------------------------------------
-    @classmethod
-    def from_legacy_checkpoint(cls, path, map_location="cpu", strict: bool = True):
-        """Build NAVE and load a ``train_phase13r`` checkpoint into it (with key
-        remapping). Returns ``(model, ckpt_meta)`` where ``ckpt_meta`` carries
-        the stored tuned ``thresholds`` and provenance. Raises if the recipe
-        arch in the checkpoint disagrees with this NAVE build."""
-        ckpt = torch.load(path, map_location=map_location, weights_only=False)
-        sd = ckpt["model_state_dict"] if "model_state_dict" in ckpt else ckpt
-
-        ak = ckpt.get("arch_kwargs", {}) if isinstance(ckpt, dict) else {}
-        for key, want in (("conv_kernel", cfg.CONV_KERNEL), ("d_model", cfg.D_MODEL),
-                          ("nhead", cfg.NHEAD), ("layers", cfg.NUM_LAYERS),
-                          ("ffn_mult", cfg.FFN_MULT)):
-            if key in ak and ak[key] != want:
-                raise ValueError(
-                    f"checkpoint arch_kwargs[{key}]={ak[key]} != NAVE config {want}; "
-                    f"this checkpoint is a different architecture.")
-
-        remapped = {}
-        for k, v in sd.items():
-            nk = _remap_legacy_key(k)
-            if nk is not None:
-                remapped[nk] = v
-
-        model = cls()
-        missing, unexpected = model.load_state_dict(remapped, strict=False)
-        if strict and (missing or unexpected):
-            raise RuntimeError(
-                f"legacy load mismatch: missing={list(missing)} unexpected={list(unexpected)}")
-        meta = {k: ckpt[k] for k in ("epoch", "thresholds", "macro_f1", "macro_paper_f1")
-                if isinstance(ckpt, dict) and k in ckpt}
-        return model, meta
-
     def load_checkpoint(self, path, map_location="cpu"):
-        """Load a native NAVE checkpoint (state_dict under 'model_state_dict' or raw)."""
+        """Load a NAVE checkpoint (state_dict under 'model_state_dict' or raw)."""
         ckpt = torch.load(path, map_location=map_location, weights_only=False)
         sd = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
         self.load_state_dict(sd, strict=True)
         return ckpt if isinstance(ckpt, dict) else None
-
-
-def build_nave() -> NAVE:
-    """The locked recipe, fully hardcoded."""
-    return NAVE()

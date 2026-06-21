@@ -1,26 +1,23 @@
 """
 NAVE training entry point (self-contained).
 ===========================================
-Trains a single NAVE model (the locked recipe) and checkpoints the EMA weights
-selected by tuned macro F1. Builds the clean ``NAVE`` model and logs progress to
-stdout (no external experiment tracker).
+Trains a single NAVE model and checkpoints the EMA weights selected by tuned
+macro F1. Logs progress to stdout.
 
     CUDA_VISIBLE_DEVICES=0 python nave_train.py --seed 42
     CUDA_VISIBLE_DEVICES=1 python nave_train.py --seed 2024 --tune-workers 20
 
-Checkpoints (native NAVE format) land in ``runs/nave_s<seed>_<timestamp>/`` as
-``nave_best.pt`` (best tuned macro) and ``nave_epoch_NN.pt``. They load with
+Checkpoints land in ``runs/nave_s<seed>_<timestamp>/`` as ``nave_best.pt`` (best
+tuned macro F1) and ``nave_epoch_NN.pt``. They load with
 ``NAVE().load_checkpoint(...)``.
 
 Self-contained
 --------------
-This module bundles the *entire* training + evaluation pipeline so the NAVE line
-runs from only four project files: ``nave_config`` / ``nave_features`` /
-``nave_model`` / ``nave_train``. The data loader, per-epoch negative resampling,
-post-processing, event-level metrics, per-class threshold tuner, EMA, optimiser
-and validation paths were inlined verbatim from the verified ``*_final`` /
-``conformer_core`` / ``tuned_val`` / ``eval_conformer`` stack and re-pointed at
-``nave_config``. Behaviour is unchanged; nothing outside these four files (and
+This module bundles the entire training + evaluation pipeline so the NAVE line
+runs from only four files: ``nave_config`` / ``nave_features`` / ``nave_model``
+/ ``nave_train``. The data loader, per-epoch negative resampling, post-
+processing, event-level metrics, per-class threshold tuner, EMA, optimiser and
+validation paths are all defined here. Nothing outside these four files (and
 the third-party packages listed in the README) is imported.
 
 Directory layout expected by the loader (set ``cfg.DATA_ROOT``)::
@@ -1041,8 +1038,8 @@ def build_optim_sched(model: nn.Module, opt_kwargs: dict,
     """Build ``(optimizer, scheduler, is_schedule_free)`` from ``opt_kwargs``:
     optimizer ("radam"|"adamw"), peak_lr, weight_decay, warmup_epochs (linear
     warmup 0->peak), schedule ("cosine"|"step"|"const"). The scheduler is a
-    per-step LambdaLR; ``is_schedule_free`` is always False here. The locked NAVE
-    recipe uses plain RAdam at constant LR (warmup 0, schedule "const")."""
+    per-step LambdaLR; ``is_schedule_free`` is always False here. The defaults
+    in ``nave_config`` use plain RAdam at constant LR (warmup 0, schedule "const")."""
     name = opt_kwargs.get("optimizer", "radam").lower()
     peak_lr = float(opt_kwargs.get("peak_lr", cfg.LR))
     wd = float(opt_kwargs.get("weight_decay", cfg.WEIGHT_DECAY))
@@ -1051,7 +1048,7 @@ def build_optim_sched(model: nn.Module, opt_kwargs: dict,
     if name in ("sf-radam", "radam-sf", "schedulefree-radam"):
         raise ValueError(
             "schedule-free RAdam is not bundled in the standalone NAVE pipeline; "
-            "use cfg.OPTIMIZER 'radam' (the locked recipe) or 'adamw'.")
+            "use cfg.OPTIMIZER 'radam' (the default) or 'adamw'.")
 
     if name == "radam":
         optimizer = torch.optim.RAdam(model.parameters(), lr=peak_lr,
